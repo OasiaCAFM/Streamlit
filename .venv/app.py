@@ -1,54 +1,41 @@
+# 2024/09/13 TeamTrashBox
+
 import streamlit as st
-import random
-import time
+import torch
+from PIL import Image
+import numpy as np
+import io
 
-# タイトル
-st.title('クレーンゲーム')
+# YOLOv5モデルの読み込み
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
 
-# 説明
-st.write('クレーンが動いている間にボタンを押してアイテムを掴もう！')
+# Streamlit UIの設定
+st.title("YOLOv5物体検出アプリ")
 
-# セッションの初期化
-if 'crane_position' not in st.session_state:
-    st.session_state['crane_position'] = 0
+# ユーザーに画像をアップロードさせる
+uploaded_file = st.file_uploader("画像をアップロードしてください", type=["jpg", "jpeg", "png"])
 
-if 'item_position' not in st.session_state:
-    st.session_state['item_position'] = random.randint(0, 10)
+if uploaded_file is not None:
+    # アップロードされた画像を読み込む
+    image = Image.open(uploaded_file)
 
-if 'game_over' not in st.session_state:
-    st.session_state['game_over'] = False
+    # 画像を表示
+    st.image(image, caption='アップロードされた画像', use_column_width=True)
 
-if 'win' not in st.session_state:
-    st.session_state['win'] = False
+    # YOLOv5で物体検出を行う
+    st.write("物体検出中...")
 
-# クレーンの動き
-if not st.session_state['game_over']:
-    st.session_state['crane_position'] = (st.session_state['crane_position'] + 1) % 11
-    st.write(f'クレーンの位置: {st.session_state["crane_position"]}')
+    # 画像をYOLOv5が扱える形式に変換
+    img_array = np.array(image)
 
-# ボタン
-if st.button('クレーンを下げる') and not st.session_state['game_over']:
-    st.session_state['game_over'] = True
-    if st.session_state['crane_position'] == st.session_state['item_position']:
-        st.session_state['win'] = True
-        st.write('おめでとう！アイテムを掴みました！')
-    else:
-        st.write('残念！アイテムは掴めませんでした。')
+    # YOLOv5で検出
+    results = model(img_array)
 
-# 再スタートボタン
-if st.session_state['game_over']:
-    if st.button('もう一度挑戦する'):
-        st.session_state['crane_position'] = 0
-        st.session_state['item_position'] = random.randint(0, 10)
-        st.session_state['game_over'] = False
-        st.session_state['win'] = False
-        st.write('新しいゲームが始まりました！')
+    # 検出結果の描画
+    results_img = results.render()[0]  # 結果を描画した画像を取得
 
-# クレーンとアイテムの位置を可視化
-crane_line = ['-' for _ in range(11)]
-crane_line[st.session_state['crane_position']] = 'C'  # クレーンの位置
-item_line = ['-' for _ in range(11)]
-item_line[st.session_state['item_position']] = 'I'  # アイテムの位置
+    # 検出結果の画像を表示
+    st.image(results_img, caption="物体検出結果", use_column_width=True)
 
-st.write('クレーン:', ' '.join(crane_line))
-st.write('アイテム:', ' '.join(item_line))
+    # 検出された物体をテキストで表示
+    st.write("検出された物体:", results.pandas().xyxy[0])
